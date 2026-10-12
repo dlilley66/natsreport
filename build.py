@@ -19,6 +19,7 @@ def games(tid,sid):
     done=[g for g in gs if g["status"]["abstractGameState"]=="Final" and "score" in g["teams"]["home"]]
     up=[g for g in gs if g["status"]["abstractGameState"]!="Final"]
     return done[-5:][::-1],up[:3]
+LOGO=lambda i:f'<img class="lg" src="https://www.mlbstatic.com/team-logos/{i}.svg" alt="" width="18" height="18">'
 def gline(g,tid,plain=False):
     a,h=g["teams"]["away"],g["teams"]["home"]
     st=g["status"]["detailedState"]; d=g.get("officialDate","")
@@ -31,15 +32,15 @@ def gline(g,tid,plain=False):
         sc=f"{me.get('score','?')}–{op.get('score','?')}"
         if plain: return f'<a href="{url}">Nats {"beat" if wl=="W" else "fall to"} {E(op["team"]["name"])} {sc}</a><span class="bmeta">{dd} · Final</span>'
         note=f' <span class="note">{E(st)}</span>' if st!="Final" else ""
-        return f'<a class="game" href="{url}"><span class="wl {wl.lower()}">{wl}</span><span class="opp">{E(opp)}{note}</span><span class="sc">{sc}</span><span class="dt">{dd}</span></a>'
+        return f'<a class="game" href="{url}"><span class="wl {wl.lower()}">{wl}</span><span class="opp">{'vs' if me is h else '@'} {LOGO(op['team']['id'])}{E(op['team']['name'])}{note}</span><span class="sc">{sc}</span><span class="dt">{dd}</span></a>'
     return f'<a class="game" href="{url}"><span class="wl n">•</span><span class="opp">{E(a["team"]["name"])} @ {E(h["team"]["name"])}</span><span class="sc"></span><span class="dt">{dd}</span></a>'
-sections={}; top=None; gaps=[]
+sections={}; top=None; gaps=[]; nats_upcoming=0
 for tid,sid,lbl in TEAMS:
     try:
         d,u=games(tid,sid)
-        if tid==120 and d: top=(d[0],tid)
+        if tid==120 and d: top=(d[0],tid); nats_upcoming=len(u)
         items=[gline(g,tid) for g in d]+[gline(g,tid) for g in u]
-        sections.setdefault("scores",[]).append((lbl,items or ["No games found"]))
+        sections.setdefault("scores",[]).append((lbl,items or ["No games found"],tid))
     except Exception as e: gaps.append(f"scores {lbl}: {e}")
 def leaders(tid,sid,group,stat,n=5,asc=False):
     r=get(f"/teams/{tid}/roster?rosterType=fullSeason&season={YEAR}&hydrate=person(stats(type=season,season={YEAR},group={group},sportId={sid}))")
@@ -134,9 +135,11 @@ for (d,typ),xs in grp.items():
 nats_items=nats_items[:15]
 pm=sorted(pros_moves.values(),key=lambda v:v[0].get("date",""),reverse=True)
 pros_items=[fmt(x,p) for x,p in pm]
-top30=[f'<a class="pros" href="{purl(pid)}"><span class="rk">{r}</span><span class="nm">{E(n)}</span><span class="pos">{E(pos or "")}</span></a>' for pid,(r,n,pos) in sorted(prospects.items(),key=lambda kv:kv[1][0])]
+top30=[f'<a class="pros" href="{purl(pid)}"><span class="rk">{r}</span><img class="hs" src="https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_60,q_auto:best/v1/people/{pid}/headshot/milb/current" alt="" loading="lazy" width="30" height="30"><span class="nm">{E(n)}</span><span class="pos">{E(pos or "")}</span></a>' for pid,(r,n,pos) in sorted(prospects.items(),key=lambda kv:kv[1][0])]
 headline="NATS REPORT"
-if top: headline=gline(*top,plain=True)
+if top:
+    headline=gline(*top,plain=True)
+    if not nats_upcoming: headline=headline.replace('· Final</span>','· Final · <b>Offseason</b> — no games scheduled; season finale</span>')
 
 import xml.etree.ElementTree as ET, email.utils, os
 def rss(url):
@@ -170,11 +173,19 @@ def tile(title,items,cls="",show=99):
     li=lambda xs:"".join(f"<li>{i}</li>" for i in xs)
     more=f'<details><summary>Show {len(items)-show} more</summary><ul>{li(items[show:])}</ul></details>' if len(items)>show else ""
     return f'<section class="tile {cls}"><h3><span>{E(title)}</span><em>{len(items)}</em></h3><ul>{li(items[:show])}</ul>{more}</section>'
-tiles=[tile("Latest News",news_items or ["No headlines fetched"],"wide news",8)]
-tiles.append(tile("Nats Roster Moves",nats_items or ["No significant moves in last 60 days"],"moves",7))
+sc=sections.get("scores",[])
+nats_sc=[x for x in sc if x[2]==120]; farm=[x for x in sc if x[2]!=120]
+def farm_tile():
+    parts="".join(f'<div class="lvl">{LOGO(t)}<span>{E(l)}</span></div><ul>'+"".join(f"<li>{i}</li>" for i in items[:3])+"</ul>" for l,items,t in farm)
+    return f'<section class="tile score farm"><h3><span>Farm System Scores</span><em>{len(farm)}</em></h3>{parts}</section>'
+def htile(title,items,cls,show,logo):
+    return tile(title,items,cls,show).replace("<h3><span>",f"<h3><span>{LOGO(logo)}",1)
+tiles=[tile("Latest News",news_items or ["No headlines fetched"],"wide news",6)]
+tiles+=[htile("Nationals Scores",i,"score",5,120) for l,i,t in nats_sc]
+tiles.append(tile("Nats Roster Moves",nats_items or ["No significant moves in last 60 days"],"moves",6))
 tiles.append(tile("Top-30 Prospect Moves",pros_items or ["No prospect moves in last 60 days"],"moves",6))
-tiles.append(tile("On X",xp or ["X posts unavailable right now (feed busy). Will appear on next refresh."],"xtile",5))
-tiles+=[tile(l,i,"score") for l,i in sections.get("scores",[])]
+tiles.append(tile("On X",xp or ["X posts unavailable right now. Will appear on next refresh."],"xtile",5))
+tiles.append(farm_tile())
 tiles+=[tile("Leaders · "+l.split(" —")[0],i,"stats",8) for l,i in stats]
 tiles.append(tile("Top 30 Prospects",(top30 or ["Prospect list unavailable"])+[f'<a class="all" href="{PROSPECT_URL}">Full list on MLB.com →</a>'],"stats",10))
 now=dt.datetime.now().strftime("%b %-d, %-I:%M %p CT")
@@ -202,12 +213,16 @@ main{{max-width:1180px;margin:0 auto;padding:16px calc(env(safe-area-inset-right
 .tile h3 em{{font-style:normal;font-weight:700;font-size:11px;color:var(--mute);background:var(--bg);border-radius:10px;padding:1px 8px}}
 ul{{list-style:none;margin:0;padding:0}}li{{padding:8px 0;border-bottom:1px solid var(--line);font-size:14px;line-height:1.35;overflow-wrap:anywhere}}li:last-child{{border:0}}
 li>a{{font-weight:600}}.meta{{display:block;color:var(--mute);font-size:12px;font-weight:400;margin-top:2px}}
-.game{{display:grid;grid-template-columns:26px 1fr auto 52px;align-items:center;gap:10px;font-weight:500}}
+.game{{display:grid;grid-template-columns:24px minmax(0,1fr) auto 46px;align-items:center;gap:10px;font-weight:500}}
 .wl{{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:6px;font-size:12px;font-weight:800;color:#fff}}.wl.w{{background:#1f7a3d}}.wl.l{{background:var(--red)}}.wl.n{{background:var(--mute)}}
 .opp{{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.sc{{font-weight:800;font-variant-numeric:tabular-nums}}.dt{{color:var(--mute);font-size:12px;text-align:right}}.note{{color:var(--red);font-size:11px}}
 .pl{{display:flex;flex-direction:column}}.pl .nm{{font-weight:700}}.pl .st{{color:var(--mute);font-size:12.5px;font-variant-numeric:tabular-nums}}
 .pros{{display:flex;align-items:center;gap:10px}}.rk{{flex:none;width:26px;height:26px;border-radius:50%;background:var(--navy);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:800}}
 .pros .nm{{font-weight:600;flex:1}}.pos{{font-size:11px;font-weight:700;color:var(--navy);background:#e8ebf5;border-radius:6px;padding:2px 6px}}
+.lg{{width:18px;height:18px;vertical-align:-4px;margin-right:6px;object-fit:contain}}.tile h3 .lg{{width:20px;height:20px;vertical-align:-5px}}
+.hs{{width:30px;height:30px;border-radius:50%;object-fit:cover;background:#e8ebf5;flex:none}}
+.lvl{{display:flex;align-items:center;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:10px 0 0}}.lvl:first-of-type{{margin-top:4px}}
+.bmeta b{{color:#ff8a8e;font-weight:700}}
 .all{{color:var(--red)!important;font-weight:700;font-size:13px}}
 details summary{{list-style:none;cursor:pointer;color:var(--red);font-weight:700;font-size:13px;padding:8px 0 4px}}details summary::-webkit-details-marker{{display:none}}details summary::after{{content:" ▾"}}details[open] summary::after{{content:" ▴"}}details[open] summary{{border-bottom:1px solid var(--line)}}
 footer{{text-align:center;color:var(--mute);font-size:12px;padding:16px 16px calc(env(safe-area-inset-bottom) + 20px)}}
