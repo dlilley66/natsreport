@@ -81,6 +81,14 @@ try:
     names={p["id"]:p["fullName"] for p in get(f"/people?personIds={ids}")["people"]} if ids else {}
     for r,p,pos in found: prospects[int(p)]=(int(r),names.get(int(p),"?"),pos)
 except Exception as e: gaps.append(f"prospects: {e}")
+import unicodedata
+slugs={int(b):a for a,b in _re.findall(r'stories/([a-z0-9-]+-(\d+))"',raw)} if 'raw' in dir() else {}
+def pslug(pid):
+    if pid in slugs: return slugs[pid]
+    n=unicodedata.normalize("NFKD",prospects[pid][1]).encode("ascii","ignore").decode().lower()
+    n=_re.sub(r"[^a-z0-9\s-]","",n); n=_re.sub(r"[\s-]+","-",n).strip("-")
+    return f"{n}-{pid}"
+def purl(pid): return f"https://www.mlb.com/app/atbat/milb/prospects/nationals/{pslug(pid)}"
 pname={v[1].lower():k for k,v in prospects.items()}
 def prank(x):
     pid=x.get("person",{}).get("id")
@@ -92,7 +100,7 @@ def fmt(x,pid):
         r,n,_=prospects[pid]
         desc=desc.replace(n,f"#{r} {n}",1) if n in desc else f"#{r} {n}: {desc}"
     d=dt.date.fromisoformat(x.get("date","")[:10]).strftime("%b %d") if x.get("date") else ""
-    href=f'https://www.mlb.com/player/{x["person"]["id"]}' if x.get("person") else None
+    href=purl(pid) if pid else (f'https://www.mlb.com/player/{x["person"]["id"]}' if x.get("person") else None)
     t=f'{E(desc)}<span class="meta">{d}</span>'
     return (f'<a href="{href}">{E(desc)}</a><span class="meta">{d}</span>') if href else t
 def noise(x):
@@ -126,7 +134,7 @@ for (d,typ),xs in grp.items():
 nats_items=nats_items[:15]
 pm=sorted(pros_moves.values(),key=lambda v:v[0].get("date",""),reverse=True)
 pros_items=[fmt(x,p) for x,p in pm]
-top30=[f'<a class="pros" href="https://www.mlb.com/player/{pid}"><span class="rk">{r}</span><span class="nm">{E(n)}</span><span class="pos">{E(pos or "")}</span></a>' for pid,(r,n,pos) in sorted(prospects.items(),key=lambda kv:kv[1][0])]
+top30=[f'<a class="pros" href="{purl(pid)}"><span class="rk">{r}</span><span class="nm">{E(n)}</span><span class="pos">{E(pos or "")}</span></a>' for pid,(r,n,pos) in sorted(prospects.items(),key=lambda kv:kv[1][0])]
 headline="NATS REPORT"
 if top: headline=gline(*top,plain=True)
 
@@ -188,7 +196,7 @@ main{{max-width:1180px;margin:0 auto;padding:16px calc(env(safe-area-inset-right
 .banner{{background:var(--navy);border-radius:14px;padding:16px 20px;margin-bottom:16px;box-shadow:0 4px 14px rgba(20,34,90,.18);border-left:6px solid var(--red)}}
 .banner small{{display:block;color:#ff8a8e;font-weight:700;text-transform:uppercase;letter-spacing:.12em;font-size:11px}}
 .banner a{{display:block;color:#fff;font-size:24px;font-weight:800;line-height:1.2;margin-top:4px}}.bmeta{{display:block;color:#c9cfe6;font-size:13px;margin-top:4px}}
-.grid{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start}}.wide{{grid-column:span 2}}
+.grid{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start}}.wide{{grid-column:span 2}}.grid.mas{{grid-auto-rows:8px;row-gap:0;grid-auto-flow:row dense}}.grid.mas>.tile{{margin-bottom:16px}}
 .tile{{background:#fff;border-radius:14px;padding:14px 16px 10px;box-shadow:0 1px 2px rgba(20,34,90,.06),0 4px 14px rgba(20,34,90,.06);min-width:0}}
 .tile h3{{display:flex;justify-content:space-between;align-items:center;margin:0 0 6px;padding-bottom:8px;border-bottom:2px solid var(--red);font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--navy)}}
 .tile h3 em{{font-style:normal;font-weight:700;font-size:11px;color:var(--mute);background:var(--bg);border-radius:10px;padding:1px 8px}}
@@ -207,7 +215,10 @@ footer{{text-align:center;color:var(--mute);font-size:12px;padding:16px 16px cal
 @media(max-width:700px){{body{{font-size:16px}}.grid{{grid-template-columns:1fr;gap:12px}}.wide{{grid-column:auto}}main{{padding-top:12px}}.banner a{{font-size:20px}}header p{{font-size:11px}}li{{font-size:15px}}.tile{{padding:12px 14px 8px}}}}
 </style></head><body><header><div class="hd"><h1>NATS <span>REPORT</span></h1><p>Updated {now}</p></div></header>
 <main><div class="banner"><small>Latest</small>{headline}</div><div class="grid">{''.join(tiles)}</div></main>
-<footer>Data: MLB Stats API · MLB Pipeline · MLB.com &amp; Google News · X</footer></body></html>"""
+<script>
+(function(){{var g=document.querySelector('.grid');function lay(){{if(getComputedStyle(g).gridTemplateColumns.split(' ').length<2){{g.classList.remove('mas');[].forEach.call(g.children,function(t){{t.style.gridRowEnd=''}});return}}g.classList.add('mas');[].forEach.call(g.children,function(t){{t.style.gridRowEnd='span '+Math.ceil((t.getBoundingClientRect().height+16)/8)}})}}
+window.addEventListener('load',lay);window.addEventListener('resize',lay);document.querySelectorAll('details').forEach(function(d){{d.addEventListener('toggle',lay)}});lay()}})();
+</script><footer>Data: MLB Stats API · MLB Pipeline · MLB.com &amp; Google News · X</footer></body></html>"""
 open("index.html","w").write(page)
 json.dump({"name":"Nats Report","short_name":"Nats Report","start_url":"./","scope":"./","display":"standalone","background_color":"#ffffff","theme_color":"#14225A","icons":[{"src":"icon.png","sizes":"180x180","type":"image/png"}]},open("manifest.json","w"))
 print("gaps:",gaps)
