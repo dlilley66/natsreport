@@ -171,10 +171,10 @@ if os.path.exists("x_posts.json"):
     for p in json.load(open("x_posts.json")).get("posts",[])[:10]:
         txt=p["text"].replace("\n"," "); txt=txt[:220]+("…" if len(txt)>220 else "")
         xp.append(f'<a href="https://x.com/{E(p["username"])}/status/{p["id"]}">{E(txt)}</a><span class="meta">@{E(p["username"])} · {dt.date.fromisoformat(p["created_at"][:10]).strftime("%b %-d")}</span>')
-def tile(title,items,cls="",show=99):
+def tile(title,items,cls="",show=99,count=None):
     li=lambda xs:"".join(f"<li>{i}</li>" for i in xs)
     more=f'<details><summary>Show {len(items)-show} more</summary><ul>{li(items[show:])}</ul></details>' if len(items)>show else ""
-    return f'<section class="tile {cls}"><h3><span>{E(title)}</span><em>{len(items)}</em></h3><ul>{li(items[:show])}</ul>{more}</section>'
+    return f'<section class="tile {cls}"><h3><span>{E(title)}</span><em>{len(items) if count is None else count}</em></h3><ul>{li(items[:show])}</ul>{more}</section>'
 sc=sections.get("scores",[])
 nats_sc=[x for x in sc if x[2]==120]; farm=[x for x in sc if x[2]!=120]
 def farm_tile():
@@ -222,7 +222,7 @@ top30=[t.replace('<span class="pos">',f'<span class="pline">{E(plines.get(pid,"N
 # ---- Today / next game
 CT=ZoneInfo("America/Chicago")
 def ct(iso): return dt.datetime.fromisoformat(iso.replace("Z","+00:00")).astimezone(CT)
-today_html=""
+today_html=""; gameday=False
 try:
     sch=get(f"/schedule?sportId=1&teamId=120&startDate={today}&endDate={today+dt.timedelta(days=7)}&hydrate=probablePitcher,linescore,venue")
     gl=[g for d in sch["dates"] for g in d["games"]]
@@ -236,6 +236,7 @@ try:
             return f'<div class="tm">{LOGO(x["team"]["id"]).replace("width=\"18\" height=\"18\"","width=\"34\" height=\"34\"")}<div><div class="tn">{E(x["team"]["name"])}</div><div class="pp">{E(pp)}</div></div>{sc}</div>'
         ls=g.get("linescore",{})
         stxt={"Preview":"Scheduled","Live":f'LIVE · {ls.get("inningHalf","")} {ls.get("currentInningOrdinal","")}',"Final":"Final"}.get(state,g["status"]["detailedState"])
+        gameday=g["officialDate"]==str(today)
         today_html=f'<section class="tile today wide"><h3><span>{"Today" if g["officialDate"]==str(today) else "Next Game"}</span><em>{E(stxt)}</em></h3>{side(a)}{side(h)}<div class="tmeta">{E(when)} · {E(g.get("venue",{}).get("name",""))} · <a href="https://www.mlb.com/gameday/{g["gamePk"]}">Gameday →</a></div></section>'
     else:
         nx=get(f"/schedule?sportId=1&teamId=120&startDate={today}&endDate={today+dt.timedelta(days=200)}&gameType=R")
@@ -277,7 +278,7 @@ tiles+=[tile("Leaders · "+l.split(" —")[0],i,"stats",8) for l,i in stats]
 tiles=[badge_html(t) for t in tiles]
 if stand_html: tiles.insert(3,stand_html)
 if today_html: tiles.insert(0,today_html)
-tiles.append(tile("Top 30 Prospects",(top30 or ["Prospect list unavailable"])+[f'<a class="all" href="{PROSPECT_URL}">Full list on MLB.com →</a>'],"stats",10))
+tiles.append(tile("Top 30 Prospects",(top30 or ["Prospect list unavailable"])+[f'<a class="all" href="{PROSPECT_URL}">Full list on MLB.com →</a>'],"stats",10,count=len(top30)))
 now=dt.datetime.now().strftime("%b %-d, %-I:%M %p CT")+(f" · SIMULATED {today}" if DEBUG else "")
 page=f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -329,7 +330,7 @@ footer{{text-align:center;color:var(--mute);font-size:12px;padding:16px 16px cal
 <script>
 (function(){{var g=document.querySelector('.grid');function lay(){{if(getComputedStyle(g).gridTemplateColumns.split(' ').length<2){{g.classList.remove('mas');[].forEach.call(g.children,function(t){{t.style.gridRowEnd=''}});return}}g.classList.add('mas');[].forEach.call(g.children,function(t){{t.style.gridRowEnd='span '+Math.ceil((t.getBoundingClientRect().height+16)/8)}})}}
 window.addEventListener('load',lay);window.addEventListener('resize',lay);document.querySelectorAll('details').forEach(function(d){{d.addEventListener('toggle',lay)}});lay()}})();
-</script><footer>Data: MLB Stats API · MLB Pipeline · MLB.com &amp; Google News · X</footer></body></html>"""
+</script>{'<script>setTimeout(function(){{location.reload()}},300000)</script>' if gameday else ''}<footer>Data: MLB Stats API · MLB Pipeline · MLB.com &amp; Google News · X</footer></body></html>"""
 open("index.html","w").write(page)
 json.dump({"name":"Nats Report","short_name":"Nats Report","start_url":"./","scope":"./","display":"standalone","background_color":"#ffffff","theme_color":"#14225A","icons":[{"src":"icon.png","sizes":"180x180","type":"image/png"}]},open("manifest.json","w"))
 print("gaps:",gaps)

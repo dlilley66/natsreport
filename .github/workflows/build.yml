@@ -1,8 +1,15 @@
 name: Build and deploy Nats Report
 on:
   schedule:
-    - cron: "15 11 * * *"
+    - cron: "15 11 * * *"        # daily refresh, 6:15 AM CDT (commits index.html)
+    - cron: "*/15 15-23 * * *"   # game hours ~10am-6:45pm CDT (gated)
+    - cron: "*/15 0-5 * * *"     # game hours ~7pm-12:45am CDT (gated)
   workflow_dispatch:
+    inputs:
+      gate:
+        description: "Apply the game-day gate (simulate a game-hours run)"
+        type: boolean
+        default: false
 permissions:
   contents: write
   pages: write
@@ -18,24 +25,35 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - name: Game-day gate
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "${{ github.event.schedule }}" != "15 11 * * *" ] || [ "${{ inputs.gate }}" = "true" ]; then
+            python3 gate.py
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "run=true  # daily/manual build"
+          fi
       - name: Build page
+        if: steps.gate.outputs.run == 'true'
         env:
           TZ: America/Chicago
         run: python3 build.py
-      - name: Commit refreshed index.html
+      - name: Commit refreshed index.html (daily/manual only)
+        if: steps.gate.outputs.run == 'true' && (github.event.schedule == '15 11 * * *' || github.event_name == 'workflow_dispatch')
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898099+github-actions[bot]@users.noreply.github.com"
           git add index.html
           git diff --cached --quiet || (git commit -m "Daily refresh $(date -u +%F)" && git push)
       - name: Stage site
+        if: steps.gate.outputs.run == 'true'
         run: mkdir _site && cp index.html manifest.json icon.png _site/
       - uses: actions/configure-pages@v5
+        if: steps.gate.outputs.run == 'true'
       - uses: actions/upload-pages-artifact@v3
+        if: steps.gate.outputs.run == 'true'
         with:
           path: _site
       - id: deploy
+        if: steps.gate.outputs.run == 'true'
         uses: actions/deploy-pages@v4
