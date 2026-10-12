@@ -5,7 +5,9 @@ API="https://statsapi.mlb.com/api/v1"
 def get(p):
     with urllib.request.urlopen(API+p, timeout=30) as r: return json.load(r)
 E=html.escape
-today=dt.date.today()
+import os
+DEBUG=os.environ.get('DEBUG_DATE')
+today=dt.date.fromisoformat(DEBUG) if DEBUG else dt.date.today()
 TEAMS=[(120,1,"Nationals"),(534,11,"Rochester (AAA)"),(547,12,"Harrisburg (AA)"),(426,13,"Wilmington (High-A)"),(436,14,"Fredericksburg (A)")]
 try:
     aff=get("/teams/affiliates?teamIds=120")["teams"]
@@ -16,8 +18,8 @@ YEAR=today.year
 def games(tid,sid):
     s=get(f"/schedule?sportId={sid}&teamId={tid}&startDate={YEAR}-02-15&endDate={today+dt.timedelta(days=60)}&hydrate=linescore")
     gs=[g for d in s["dates"] for g in d["games"]]
-    done=[g for g in gs if g["status"]["abstractGameState"]=="Final" and "score" in g["teams"]["home"]]
-    up=[g for g in gs if g["status"]["abstractGameState"]!="Final"]
+    done=[g for g in gs if g["status"]["abstractGameState"]=="Final" and "score" in g["teams"]["home"] and g["officialDate"]<str(today)]
+    up=[g for g in gs if g["officialDate"]>=str(today) and (g["status"]["abstractGameState"]!="Final" or DEBUG)]
     return done[-5:][::-1],up[:3]
 LOGO=lambda i:f'<img class="lg" src="https://www.mlbstatic.com/team-logos/{i}.svg" alt="" width="18" height="18">'
 def gline(g,tid,plain=False):
@@ -99,7 +101,7 @@ def fmt(x,pid):
     desc=x.get("description") or x.get("typeDesc","")
     if pid:
         r,n,_=prospects[pid]
-        desc=desc.replace(n,f"#{r} {n}",1) if n in desc else f"#{r} {n}: {desc}"
+        desc=desc if n in desc else f"{n}: {desc}"
     d=dt.date.fromisoformat(x.get("date","")[:10]).strftime("%b %d") if x.get("date") else ""
     href=purl(pid) if pid else (f'https://www.mlb.com/player/{x["person"]["id"]}' if x.get("person") else None)
     t=f'{E(desc)}<span class="meta">{d}</span>'
@@ -139,7 +141,7 @@ top30=[f'<a class="pros" href="{purl(pid)}"><span class="rk">{r}</span><img clas
 headline="NATS REPORT"
 if top:
     headline=gline(*top,plain=True)
-    if not nats_upcoming: headline=headline.replace('· Final</span>','· Final · <b>Offseason</b> — no games scheduled; season finale</span>')
+    if not nats_upcoming: headline=headline.replace('· Final</span>','· Final · <b>Offseason</b> — season finale</span>')
 
 import xml.etree.ElementTree as ET, email.utils, os
 def rss(url):
@@ -180,6 +182,91 @@ def farm_tile():
     return f'<section class="tile score farm"><h3><span>Farm System Scores</span><em>{len(farm)}</em></h3>{parts}</section>'
 def htile(title,items,cls,show,logo):
     return tile(title,items,cls,show).replace("<h3><span>",f"<h3><span>{LOGO(logo)}",1)
+
+from zoneinfo import ZoneInfo
+from concurrent.futures import ThreadPoolExecutor
+# ---- prospect season lines (aggregated across levels)
+PIT=("RHP","LHP","P")
+plines={}
+try:
+    ids=",".join(map(str,prospects))
+    agg={}
+    for sp in (1,11,12,13,14):
+        for pe in get(f"/people?personIds={ids}&hydrate=stats(group=[hitting,pitching],type=[season],season={YEAR},sportId={sp})")["people"]:
+            for st in pe.get("stats",[]):
+                g=st["group"]["displayName"]
+                for x in st["splits"]:
+                    a=agg.setdefault((pe["id"],g),{"lv":[]}); a["lv"].append(sp)
+                    for k,v in x["stat"].items():
+                        if isinstance(v,(int,float)): a[k]=a.get(k,0)+v
+    LV={1:"MLB",11:"AAA",12:"AA",13:"A+",14:"A"}
+    for pid,(r,n,pos) in prospects.items():
+        isp=any(p in (pos or "") for p in PIT)
+        a=agg.get((pid,"pitching" if isp else "hitting"))
+        if not a: continue
+        lv="/".join(LV[x] for x in sorted(set(a["lv"]),key=lambda q:[1,11,12,13,14].index(q)))
+        if isp:
+            o=a.get("outs",0); ip=o/3 or 0
+            if not o: continue
+            era=9*a.get("earnedRuns",0)/ip; whip=(a.get("baseOnBalls",0)+a.get("hits",0))/ip
+            plines[pid]=f"{lv} · {era:.2f} ERA · {o//3}.{o%3} IP · {a.get('strikeOuts',0)} K · {whip:.2f} WHIP"
+        else:
+            ab=a.get("atBats",0)
+            if not ab: continue
+            h,bb,hbp,sf=a.get("hits",0),a.get("baseOnBalls",0),a.get("hitByPitch",0),a.get("sacFlies",0)
+            tb=a.get("totalBases",0); f=lambda v:f"{v:.3f}".lstrip("0")
+            obp=(h+bb+hbp)/max(1,ab+bb+hbp+sf)
+            plines[pid]=f"{lv} · {f(h/ab)}/{f(obp)}/{f(tb/ab)} · {a.get('homeRuns',0)} HR · {a.get('stolenBases',0)} SB"
+except Exception as e: gaps.append(f"prospect stats: {e}")
+top30=[t.replace('<span class="pos">',f'<span class="pline">{E(plines.get(pid,"No 2026 stats"))}</span><span class="pos">',1) for t,pid in zip(top30,[k for k,_ in sorted(prospects.items(),key=lambda kv:kv[1][0])])]
+# ---- Today / next game
+CT=ZoneInfo("America/Chicago")
+def ct(iso): return dt.datetime.fromisoformat(iso.replace("Z","+00:00")).astimezone(CT)
+today_html=""
+try:
+    sch=get(f"/schedule?sportId=1&teamId=120&startDate={today}&endDate={today+dt.timedelta(days=7)}&hydrate=probablePitcher,linescore,venue")
+    gl=[g for d in sch["dates"] for g in d["games"]]
+    if gl:
+        g=gl[0]; a,h=g["teams"]["away"],g["teams"]["home"]
+        state=g["status"]["abstractGameState"]; t=ct(g["gameDate"])
+        when=("Today" if g["officialDate"]==str(today) else t.strftime("%a %b %-d"))+" · "+t.strftime("%-I:%M %p CT")
+        def side(x):
+            pp=x.get("probablePitcher",{}).get("fullName","TBD")
+            sc=f'<b class="tsc">{x.get("score","")}</b>' if state!="Preview" else ""
+            return f'<div class="tm">{LOGO(x["team"]["id"]).replace("width=\"18\" height=\"18\"","width=\"34\" height=\"34\"")}<div><div class="tn">{E(x["team"]["name"])}</div><div class="pp">{E(pp)}</div></div>{sc}</div>'
+        ls=g.get("linescore",{})
+        stxt={"Preview":"Scheduled","Live":f'LIVE · {ls.get("inningHalf","")} {ls.get("currentInningOrdinal","")}',"Final":"Final"}.get(state,g["status"]["detailedState"])
+        today_html=f'<section class="tile today wide"><h3><span>{"Today" if g["officialDate"]==str(today) else "Next Game"}</span><em>{E(stxt)}</em></h3>{side(a)}{side(h)}<div class="tmeta">{E(when)} · {E(g.get("venue",{}).get("name",""))} · <a href="https://www.mlb.com/gameday/{g["gamePk"]}">Gameday →</a></div></section>'
+    else:
+        nx=get(f"/schedule?sportId=1&teamId=120&startDate={today}&endDate={today+dt.timedelta(days=200)}&gameType=R")
+        ng=[g for d in nx["dates"] for g in d["games"]]
+        if ng: today_html=f'<section class="tile today"><h3><span>Next Game</span></h3><div class="tmeta">Opening Day {ct(ng[0]["gameDate"]).strftime("%a %b %-d, %Y")}</div></section>'
+except Exception as e: gaps.append(f"today: {e}")
+# ---- standings
+stand_html=""; strip=[]
+try:
+    st=get(f"/standings?leagueId=104&season={YEAR}&date={today}&standingsTypes=regularSeason")
+    if not st["records"]: st=get(f"/standings?leagueId=104&season={YEAR}&standingsTypes=regularSeason")
+    rec=[r for r in st["records"] if r["division"]["id"]==204]
+    rows="".join(f'<tr class="{"us" if t["team"]["id"]==120 else ""}"><td>{LOGO(t["team"]["id"])}{E(t["team"]["name"].split()[-1])}</td><td>{t["wins"]}</td><td>{t["losses"]}</td><td>{t["winningPercentage"]}</td><td>{t["gamesBack"]}</td></tr>' for t in (rec[0]["teamRecords"] if rec else []))
+    if rows: stand_html=f'<section class="tile stand"><h3><span>NL East {"Final " if not nats_upcoming else ""}Standings</span><em>{YEAR}</em></h3><table><tr><th></th><th>W</th><th>L</th><th>PCT</th><th>GB</th></tr>{rows}</table>'
+    for tid,sid,lbl in TEAMS[1:]:
+        lg=get(f"/teams/{tid}")["teams"][0]["league"]["id"]
+        s2=get(f"/standings?leagueId={lg}&season={YEAR}&date={today}")
+        if not s2["records"]: s2=get(f"/standings?leagueId={lg}&season={YEAR}")
+        for r in s2["records"]:
+            for t in r["teamRecords"]:
+                if t["team"]["id"]==tid: strip.append(f'<div class="aff">{LOGO(tid)}<span>{E(lbl)}</span><b>{t["wins"]}-{t["losses"]}</b><em>{"—" if t["gamesBack"]=="-" else t["gamesBack"]+" GB"}</em></div>')
+    if stand_html: stand_html+=(f'<div class="lvl">Affiliates</div>{"".join(strip)}' if strip else "")+"</section>"
+except Exception as e: gaps.append(f"standings: {e}")
+# ---- rank badges in text
+import re as _r2
+def badge_html(h):
+    if not prospects: return h
+    pat=_r2.compile(r"(?<![\w#])("+"|".join(_r2.escape(E(n)) for _,n,_ in prospects.values())+r")(?![\w])")
+    rk={E(n):r for r,n,_ in prospects.values()}
+    parts=_r2.split(r"(<[^>]+>)",h)
+    return "".join(p if p.startswith("<") else pat.sub(lambda m:f'<span class="prk">#{rk[m.group(1)]}</span>{m.group(1)}',p) for p in parts)
 tiles=[tile("Latest News",news_items or ["No headlines fetched"],"wide news",6)]
 tiles+=[htile("Nationals Scores",i,"score",5,120) for l,i,t in nats_sc]
 tiles.append(tile("Nats Roster Moves",nats_items or ["No significant moves in last 60 days"],"moves",6))
@@ -187,8 +274,11 @@ tiles.append(tile("Top-30 Prospect Moves",pros_items or ["No prospect moves in l
 tiles.append(tile("On X",xp or ["X posts unavailable right now. Will appear on next refresh."],"xtile",5))
 tiles.append(farm_tile())
 tiles+=[tile("Leaders · "+l.split(" —")[0],i,"stats",8) for l,i in stats]
+tiles=[badge_html(t) for t in tiles]
+if stand_html: tiles.insert(3,stand_html)
+if today_html: tiles.insert(0,today_html)
 tiles.append(tile("Top 30 Prospects",(top30 or ["Prospect list unavailable"])+[f'<a class="all" href="{PROSPECT_URL}">Full list on MLB.com →</a>'],"stats",10))
-now=dt.datetime.now().strftime("%b %-d, %-I:%M %p CT")
+now=dt.datetime.now().strftime("%b %-d, %-I:%M %p CT")+(f" · SIMULATED {today}" if DEBUG else "")
 page=f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
@@ -222,6 +312,12 @@ li>a{{font-weight:600}}.meta{{display:block;color:var(--mute);font-size:12px;fon
 .lg{{width:18px;height:18px;vertical-align:-4px;margin-right:6px;object-fit:contain}}.tile h3 .lg{{width:20px;height:20px;vertical-align:-5px}}
 .hs{{width:30px;height:30px;border-radius:50%;object-fit:cover;background:#e8ebf5;flex:none}}
 .lvl{{display:flex;align-items:center;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:10px 0 0}}.lvl:first-of-type{{margin-top:4px}}
+.prk{{display:inline-block;background:var(--red);color:#fff;font-size:10px;font-weight:800;border-radius:5px;padding:1px 4px;margin-right:4px;vertical-align:1px}}
+.pros{{flex-wrap:wrap}}.pros .nm{{flex:1 1 auto}}.pline{{flex:1 0 100%;order:9;padding-left:76px;margin-top:-4px;color:var(--mute);font-size:12px;font-variant-numeric:tabular-nums}}
+.today .tm{{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}}.today .tm>div{{flex:1}}.tn{{font-weight:800;font-size:17px}}.pp{{color:var(--mute);font-size:12.5px}}.tsc{{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums}}
+.tmeta{{color:var(--mute);font-size:13px;padding-top:8px}}.tmeta a{{color:var(--red);font-weight:700}}
+.stand table{{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}}.stand th{{font-size:11px;color:var(--mute);text-align:right;font-weight:700;padding:4px}}.stand td{{padding:6px 4px;border-bottom:1px solid var(--line);text-align:right}}.stand td:first-child{{text-align:left;font-weight:600}}.stand tr.us td{{background:#fff4f4;font-weight:800}}
+.aff{{display:grid;grid-template-columns:24px 1fr auto 56px;align-items:center;gap:6px;font-size:13px;padding:5px 0;border-bottom:1px solid var(--line)}}.aff em{{font-style:normal;color:var(--mute);text-align:right;font-size:12px}}
 .bmeta b{{color:#ff8a8e;font-weight:700}}
 .all{{color:var(--red)!important;font-weight:700;font-size:13px}}
 details summary{{list-style:none;cursor:pointer;color:var(--red);font-weight:700;font-size:13px;padding:8px 0 4px}}details summary::-webkit-details-marker{{display:none}}details summary::after{{content:" ▾"}}details[open] summary::after{{content:" ▴"}}details[open] summary{{border-bottom:1px solid var(--line)}}

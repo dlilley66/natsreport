@@ -3,3 +3,4 @@ __pycache__/
 *.log
 shot.py
 before*.png
+screenshot_inseason.png
