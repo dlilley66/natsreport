@@ -19,23 +19,26 @@ def games(tid,sid):
     done=[g for g in gs if g["status"]["abstractGameState"]=="Final" and "score" in g["teams"]["home"]]
     up=[g for g in gs if g["status"]["abstractGameState"]!="Final"]
     return done[-5:][::-1],up[:3]
-def gline(g,tid):
+def gline(g,tid,plain=False):
     a,h=g["teams"]["away"],g["teams"]["home"]
     st=g["status"]["detailedState"]; d=g.get("officialDate","")
+    dd=dt.date.fromisoformat(d).strftime("%b %-d") if d else ""
+    url=f'https://www.mlb.com/gameday/{g["gamePk"]}'
     if g["status"]["abstractGameState"]=="Final":
         me,op=(h,a) if h["team"]["id"]==tid else (a,h)
         wl="W" if me.get("isWinner") else "L"
-        txt=f"{wl} {me.get('score','?')}-{op.get('score','?')} {'vs' if me is h else '@'} {op['team']['name']} ({d})"
-        if st!="Final": txt+=f" [{st}]"
-    else:
-        txt=f"{a['team']['name']} @ {h['team']['name']} — {d} {st}"
-    return f'<a href="https://www.mlb.com/gameday/{g["gamePk"]}">{E(txt)}</a>'
+        opp=f"{'vs' if me is h else '@'} {op['team']['name']}"
+        sc=f"{me.get('score','?')}–{op.get('score','?')}"
+        if plain: return f'<a href="{url}">Nats {"beat" if wl=="W" else "fall to"} {E(op["team"]["name"])} {sc}</a><span class="bmeta">{dd} · Final</span>'
+        note=f' <span class="note">{E(st)}</span>' if st!="Final" else ""
+        return f'<a class="game" href="{url}"><span class="wl {wl.lower()}">{wl}</span><span class="opp">{E(opp)}{note}</span><span class="sc">{sc}</span><span class="dt">{dd}</span></a>'
+    return f'<a class="game" href="{url}"><span class="wl n">•</span><span class="opp">{E(a["team"]["name"])} @ {E(h["team"]["name"])}</span><span class="sc"></span><span class="dt">{dd}</span></a>'
 sections={}; top=None; gaps=[]
 for tid,sid,lbl in TEAMS:
     try:
         d,u=games(tid,sid)
         if tid==120 and d: top=(d[0],tid)
-        items=[gline(g,tid) for g in d]+[ "<b>NEXT:</b> "+gline(g,tid) for g in u]
+        items=[gline(g,tid) for g in d]+[gline(g,tid) for g in u]
         sections.setdefault("scores",[]).append((lbl,items or ["No games found"]))
     except Exception as e: gaps.append(f"scores {lbl}: {e}")
 def leaders(tid,sid,group,stat,n=5,asc=False):
@@ -52,7 +55,10 @@ def leaders(tid,sid,group,stat,n=5,asc=False):
     rows.sort(key=key,reverse=not asc)
     seen=set(); rows=[r for r in rows if not (r[0]["id"] in seen or seen.add(r[0]["id"]))]
     return rows[:n]
-def plink(pe,txt): return f'<a href="https://www.mlb.com/player/{pe["id"]}">{E(txt)}</a>'
+def plink(pe,txt):
+    n,_,rest=txt.partition(": ")
+    if n.startswith("HR"): n,rest=("HR leader · "+txt[4:].rsplit(" ",1)[0]),txt.rsplit(" ",1)[1]+" HR"
+    return f'<a class="pl" href="https://www.mlb.com/player/{pe["id"]}"><span class="nm">{E(n)}</span><span class="st">{E(rest)}</span></a>'
 stats=[]
 for tid,sid,lbl in TEAMS[:3]:
     try:
@@ -120,9 +126,9 @@ for (d,typ),xs in grp.items():
 nats_items=nats_items[:15]
 pm=sorted(pros_moves.values(),key=lambda v:v[0].get("date",""),reverse=True)
 pros_items=[fmt(x,p) for x,p in pm]
-top30=[f'<a href="https://www.mlb.com/player/{pid}">#{r} {E(n)}</a> <span class="meta" style="display:inline">{E(pos or "")}</span>' for pid,(r,n,pos) in sorted(prospects.items(),key=lambda kv:kv[1][0])]
+top30=[f'<a class="pros" href="https://www.mlb.com/player/{pid}"><span class="rk">{r}</span><span class="nm">{E(n)}</span><span class="pos">{E(pos or "")}</span></a>' for pid,(r,n,pos) in sorted(prospects.items(),key=lambda kv:kv[1][0])]
 headline="NATS REPORT"
-if top: headline=gline(*top)
+if top: headline=gline(*top,plain=True)
 
 import xml.etree.ElementTree as ET, email.utils, os
 def rss(url):
@@ -146,48 +152,62 @@ for n in sorted(news,key=lambda n:n["date"].timestamp() if n["date"] else 0,reve
     k="".join(c for c in n["title"].lower() if c.isalnum())[:60]
     if k in seen or not n["title"]: continue
     seen.add(k); nd.append(n)
-news_items=[f'<a href="{E(n["link"])}">{E(n["title"])}</a><span class="meta">{E(n["src"])} · {n["date"].strftime("%b %d") if n["date"] else ""}</span>' for n in nd[:10]]
+news_items=[f'<a href="{E(n["link"])}">{E(n["title"])}</a><span class="meta">{E(n["src"])} · {n["date"].strftime("%b %-d") if n["date"] else ""}</span>' for n in nd[:10]]
 xp=[]
 if os.path.exists("x_posts.json"):
     for p in json.load(open("x_posts.json")).get("posts",[])[:10]:
         txt=p["text"].replace("\n"," "); txt=txt[:220]+("…" if len(txt)>220 else "")
-        xp.append(f'<a href="https://x.com/{E(p["username"])}/status/{p["id"]}">{E(txt)}</a><span class="meta">@{E(p["username"])} · {E(p["created_at"][:10])}</span>')
+        xp.append(f'<a href="https://x.com/{E(p["username"])}/status/{p["id"]}">{E(txt)}</a><span class="meta">@{E(p["username"])} · {dt.date.fromisoformat(p["created_at"][:10]).strftime("%b %-d")}</span>')
 def tile(title,items,cls="",show=99):
     li=lambda xs:"".join(f"<li>{i}</li>" for i in xs)
-    more=f'<details><summary>More ({len(items)-show})</summary><ul>{li(items[show:])}</ul></details>' if len(items)>show else ""
-    return f'<section class="tile {cls}"><h3>{E(title)}</h3><ul>{li(items[:show])}</ul>{more}</section>'
+    more=f'<details><summary>Show {len(items)-show} more</summary><ul>{li(items[show:])}</ul></details>' if len(items)>show else ""
+    return f'<section class="tile {cls}"><h3><span>{E(title)}</span><em>{len(items)}</em></h3><ul>{li(items[:show])}</ul>{more}</section>'
 tiles=[tile("Latest News",news_items or ["No headlines fetched"],"wide news",8)]
 tiles.append(tile("Nats Roster Moves",nats_items or ["No significant moves in last 60 days"],"moves",7))
 tiles.append(tile("Top-30 Prospect Moves",pros_items or ["No prospect moves in last 60 days"],"moves",6))
 tiles.append(tile("On X",xp or ["X posts unavailable right now (feed busy). Will appear on next refresh."],"xtile",5))
 tiles+=[tile(l,i,"score") for l,i in sections.get("scores",[])]
 tiles+=[tile("Leaders · "+l.split(" —")[0],i,"stats",8) for l,i in stats]
-tiles.append(tile("Top 30 Prospects (MLB Pipeline)",(top30 or ["Prospect list unavailable"])+[f'<a href="{PROSPECT_URL}">Full list on MLB.com »</a>'],"stats",10))
-now=dt.datetime.now().strftime("%b %d, %Y %I:%M %p CT")
+tiles.append(tile("Top 30 Prospects",(top30 or ["Prospect list unavailable"])+[f'<a class="all" href="{PROSPECT_URL}">Full list on MLB.com →</a>'],"stats",10))
+now=dt.datetime.now().strftime("%b %-d, %-I:%M %p CT")
 page=f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Nats Report">
 <meta name="theme-color" content="#14225A"><link rel="manifest" href="manifest.json"><link rel="apple-touch-icon" href="icon.png">
 <title>Nats Report</title><style>
-:root{{--navy:#14225A;--red:#AB0003}}
-*{{box-sizing:border-box}}body{{margin:0;background:#f3f4f8;color:#1c1f2a;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Helvetica,Arial,sans-serif}}
-header{{background:var(--navy);color:#fff;padding:18px 20px calc(18px);border-bottom:4px solid var(--red)}}
-header h1{{margin:0;font-size:1.5em;letter-spacing:.5px}}header h1 span{{color:#ff5a5f}}header p{{margin:4px 0 0;opacity:.75;font-size:.85em}}
-main{{max-width:1180px;margin:0 auto;padding:14px}}
-.banner{{background:#fff;border-left:6px solid var(--red);border-radius:14px;padding:18px 22px;box-shadow:0 2px 10px rgba(20,34,90,.08);margin-bottom:14px}}
-.banner small{{color:var(--red);font-weight:700;text-transform:uppercase;letter-spacing:1px;font-size:.75em}}
-.banner a{{display:block;color:var(--navy);font-size:1.45em;font-weight:800;margin-top:4px;text-decoration:none}}
-.grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:start}}.wide{{grid-column:span 2}}
-.tile{{background:#fff;border-radius:14px;padding:12px 16px;box-shadow:0 2px 10px rgba(20,34,90,.08)}}
-.tile h3{{margin:0 0 10px;font-size:.8em;text-transform:uppercase;letter-spacing:1px;color:var(--navy);border-bottom:2px solid var(--red);padding-bottom:8px}}
-ul{{list-style:none;margin:0;padding:0}}li{{padding:5px 0;border-bottom:1px solid #eef0f5;font-size:.86em;line-height:1.3}}.meta{{display:block;color:#7a8099;font-size:.82em;font-weight:400;margin-top:2px}}details summary{{cursor:pointer;color:#AB0003;font-weight:700;font-size:.82em;padding-top:6px}}.score li{{font-size:.84em}}li:last-child{{border:0}}
-li a{{color:#1c1f2a;text-decoration:none;font-weight:600}}li a:hover{{color:var(--red)}}
-footer{{text-align:center;color:#888;font-size:.8em;padding:20px}}
-@media(max-width:1000px){{.grid{{grid-template-columns:1fr 1fr}}}}@media(max-width:700px){{.grid{{grid-template-columns:1fr}}.wide{{grid-column:auto}}main{{padding:12px}}.banner a{{font-size:1.15em}}}}
-</style></head><body><header><h1>NATS <span>REPORT</span></h1><p>Washington Nationals · MLB &amp; Minors · Updated {now}</p></header>
+:root{{--navy:#14225A;--red:#AB0003;--ink:#151a2d;--mute:#6b7189;--line:#eceef4;--bg:#f2f3f7;color-scheme:light}}
+*{{box-sizing:border-box}}html{{-webkit-text-size-adjust:100%}}
+body{{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Inter,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}}
+a{{color:var(--ink);text-decoration:none}}a:hover{{color:var(--red)}}
+header{{position:sticky;top:0;z-index:10;background:var(--navy);color:#fff;border-bottom:3px solid var(--red);padding:calc(env(safe-area-inset-top) + 10px) calc(env(safe-area-inset-right) + 16px) 10px calc(env(safe-area-inset-left) + 16px)}}
+.hd{{max-width:1180px;margin:0 auto;display:flex;align-items:baseline;justify-content:space-between;gap:12px}}
+header h1{{margin:0;font-size:19px;font-weight:800;letter-spacing:.06em}}header h1 span{{color:#ff6b70}}
+header p{{margin:0;font-size:12px;color:#c9cfe6;white-space:nowrap}}
+main{{max-width:1180px;margin:0 auto;padding:16px calc(env(safe-area-inset-right) + 16px) 8px calc(env(safe-area-inset-left) + 16px)}}
+.banner{{background:var(--navy);border-radius:14px;padding:16px 20px;margin-bottom:16px;box-shadow:0 4px 14px rgba(20,34,90,.18);border-left:6px solid var(--red)}}
+.banner small{{display:block;color:#ff8a8e;font-weight:700;text-transform:uppercase;letter-spacing:.12em;font-size:11px}}
+.banner a{{display:block;color:#fff;font-size:24px;font-weight:800;line-height:1.2;margin-top:4px}}.bmeta{{display:block;color:#c9cfe6;font-size:13px;margin-top:4px}}
+.grid{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start}}.wide{{grid-column:span 2}}
+.tile{{background:#fff;border-radius:14px;padding:14px 16px 10px;box-shadow:0 1px 2px rgba(20,34,90,.06),0 4px 14px rgba(20,34,90,.06);min-width:0}}
+.tile h3{{display:flex;justify-content:space-between;align-items:center;margin:0 0 6px;padding-bottom:8px;border-bottom:2px solid var(--red);font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--navy)}}
+.tile h3 em{{font-style:normal;font-weight:700;font-size:11px;color:var(--mute);background:var(--bg);border-radius:10px;padding:1px 8px}}
+ul{{list-style:none;margin:0;padding:0}}li{{padding:8px 0;border-bottom:1px solid var(--line);font-size:14px;line-height:1.35;overflow-wrap:anywhere}}li:last-child{{border:0}}
+li>a{{font-weight:600}}.meta{{display:block;color:var(--mute);font-size:12px;font-weight:400;margin-top:2px}}
+.game{{display:grid;grid-template-columns:26px 1fr auto 52px;align-items:center;gap:10px;font-weight:500}}
+.wl{{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:6px;font-size:12px;font-weight:800;color:#fff}}.wl.w{{background:#1f7a3d}}.wl.l{{background:var(--red)}}.wl.n{{background:var(--mute)}}
+.opp{{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.sc{{font-weight:800;font-variant-numeric:tabular-nums}}.dt{{color:var(--mute);font-size:12px;text-align:right}}.note{{color:var(--red);font-size:11px}}
+.pl{{display:flex;flex-direction:column}}.pl .nm{{font-weight:700}}.pl .st{{color:var(--mute);font-size:12.5px;font-variant-numeric:tabular-nums}}
+.pros{{display:flex;align-items:center;gap:10px}}.rk{{flex:none;width:26px;height:26px;border-radius:50%;background:var(--navy);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:800}}
+.pros .nm{{font-weight:600;flex:1}}.pos{{font-size:11px;font-weight:700;color:var(--navy);background:#e8ebf5;border-radius:6px;padding:2px 6px}}
+.all{{color:var(--red)!important;font-weight:700;font-size:13px}}
+details summary{{list-style:none;cursor:pointer;color:var(--red);font-weight:700;font-size:13px;padding:8px 0 4px}}details summary::-webkit-details-marker{{display:none}}details summary::after{{content:" ▾"}}details[open] summary::after{{content:" ▴"}}details[open] summary{{border-bottom:1px solid var(--line)}}
+footer{{text-align:center;color:var(--mute);font-size:12px;padding:16px 16px calc(env(safe-area-inset-bottom) + 20px)}}
+@media(max-width:1000px){{.grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}}}
+@media(max-width:700px){{body{{font-size:16px}}.grid{{grid-template-columns:1fr;gap:12px}}.wide{{grid-column:auto}}main{{padding-top:12px}}.banner a{{font-size:20px}}header p{{font-size:11px}}li{{font-size:15px}}.tile{{padding:12px 14px 8px}}}}
+</style></head><body><header><div class="hd"><h1>NATS <span>REPORT</span></h1><p>Updated {now}</p></div></header>
 <main><div class="banner"><small>Latest</small>{headline}</div><div class="grid">{''.join(tiles)}</div></main>
-<footer>Data: MLB Stats API</footer></body></html>"""
+<footer>Data: MLB Stats API · MLB Pipeline · MLB.com &amp; Google News · X</footer></body></html>"""
 open("index.html","w").write(page)
 json.dump({"name":"Nats Report","short_name":"Nats Report","start_url":"./","scope":"./","display":"standalone","background_color":"#ffffff","theme_color":"#14225A","icons":[{"src":"icon.png","sizes":"180x180","type":"image/png"}]},open("manifest.json","w"))
 print("gaps:",gaps)
