@@ -44,3 +44,6 @@ text-shadow:2px 2px 0 #000,-2px -2px 0 #000,2px -2px 0 #000,-2px 2px 0 #000;font
 .meme.red{background:repeating-linear-gradient(90deg,rgba(255,255,255,.06) 0 1px,transparent 1px 18px),#AB0003}
 .meme .emo{font-size:64px;text-shadow:none}
 @media(min-width:620px){.meme{font-size:18px}.meme .emo{font-size:44px}}
+.mh h1 .lp{display:inline;color:#7fd39a;text-shadow:0 3px 0 #0d4d24,0 6px 16px rgba(0,0,0,.35)}
+.mh .pad{position:absolute;width:46px;height:46px;right:16px;bottom:18px;transform:rotate(-12deg);opacity:.95;filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))}
+@media(min-width:760px){.mh .pad{width:60px;height:60px;right:28px}}
