@@ -20,3 +20,16 @@ main{max-width:720px;margin:0 auto;padding:16px calc(env(safe-area-inset-right) 
 ul.l{margin:0;padding-left:18px}ul.l li{margin:0 0 8px;font-size:15px}.src{color:var(--mute);font-size:12.5px}
 .issue{display:block;text-decoration:none;padding:12px 0;border-bottom:1px solid var(--line)}.issue b{display:block;color:var(--ink)}.issue span{color:var(--mute);font-size:13px;font-weight:400}
 footer{text-align:center;color:var(--mute);font-size:12px;padding:12px 16px calc(env(safe-area-inset-bottom) + 24px)}
+.mh{position:relative;overflow:hidden;margin:-16px calc(-1*(env(safe-area-inset-right) + 16px)) 16px calc(-1*(env(safe-area-inset-left) + 16px));padding:28px 20px 22px;color:#fff;text-align:center;
+background:repeating-linear-gradient(90deg,rgba(255,255,255,.045) 0 1px,transparent 1px 22px),radial-gradient(120% 90% at 50% 0%,#22357e 0%,#14225A 60%,#0d1740 100%)}
+.mh:before,.mh:after{content:"";position:absolute;left:0;right:0;height:8px;background:linear-gradient(#AB0003 0 3px,#fff 3px 5px,#AB0003 5px 8px)}.mh:before{top:0}.mh:after{bottom:0}
+.mh .stitch{position:absolute;width:260px;height:260px;border-radius:50%;border:2px dashed rgba(255,107,112,.22);top:-150px;right:-90px}
+.mh .stitch.b{top:auto;bottom:-170px;left:-110px;right:auto}
+.mh img{width:56px;height:56px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.35));background:#fff;border-radius:50%;padding:6px}
+.mh .kick{display:block;margin-top:10px;font-size:11px;font-weight:800;letter-spacing:.3em;color:#ff8a8e}
+.mh h1{margin:4px 0 0;font-family:"Oswald","Bebas Neue","Arial Narrow","Helvetica Neue Condensed",Impact,sans-serif;font-stretch:condensed;font-weight:900;font-size:clamp(38px,12vw,64px);line-height:.92;letter-spacing:.01em;text-transform:uppercase;text-shadow:0 3px 0 #AB0003,0 6px 16px rgba(0,0,0,.35)}
+.mh h1 span{display:block;color:#ff5a5f;text-shadow:0 3px 0 #fff2,0 6px 16px rgba(0,0,0,.35)}
+.mh .dl{display:inline-flex;gap:10px;align-items:center;margin-top:14px;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#dfe3f3}
+.mh .dl b{background:#AB0003;color:#fff;border-radius:6px;padding:3px 8px;letter-spacing:.08em}
+.hl{font-size:22px;line-height:1.2;margin:0 0 16px;color:var(--navy);font-weight:800;text-align:center}
+@media(min-width:760px){.mh{margin-left:0;margin-right:0;border-radius:16px;margin-top:0}}
