@@ -63,13 +63,21 @@ def plink(pe,txt):
     if n.startswith("HR"): n,rest=("HR leader · "+txt[4:].rsplit(" ",1)[0]),txt.rsplit(" ",1)[1]+" HR"
     return f'<a class="pl" href="https://www.mlb.com/player/{pe["id"]}"><span class="nm">{E(n)}</span><span class="st">{E(rest)}</span></a>'
 stats=[]
+try: FORTY={x["person"]["id"] for x in get("/teams/120/roster?rosterType=40Man")["roster"]}
+except Exception: FORTY=set()
 for tid,sid,lbl in TEAMS[:3]:
     try:
         h=leaders(tid,sid,"hitting","ops"); p=leaders(tid,sid,"pitching","era",asc=True)
         hr=leaders(tid,sid,"hitting","homeRuns",3)
-        it=[plink(pe,f"{pe['fullName']}: {s['avg']}/{s['obp']}/{s['slg']}, {s['homeRuns']} HR, {s['rbi']} RBI") for pe,s in h]
+        ids=",".join(str(pe["id"]) for pe,_ in h+p+hr)
+        cur={x["id"]:x.get("currentTeam",{}) for x in get(f"/people?personIds={ids}&hydrate=currentTeam")["people"]} if ids else {}
+        def gone(pe):
+            if pe["id"] in FORTY: return ""
+            c=cur.get(pe["id"],{})
+            return "" if (c.get("id") in {t for t,_,_ in TEAMS} or c.get("parentOrgId")==120 or not c) else f" · now with {c.get('name')}"
+        it=[plink(pe,f"{pe['fullName']}: {s['avg']}/{s['obp']}/{s['slg']}, {s['homeRuns']} HR, {s['rbi']} RBI{gone(pe)}") for pe,s in h]
         it+=[plink(pe,f"HR: {pe['fullName']} {s['homeRuns']}") for pe,s in hr[:1]]
-        it+=[plink(pe,f"{pe['fullName']}: {s['era']} ERA, {s['inningsPitched']} IP, {s['strikeOuts']} K") for pe,s in p]
+        it+=[plink(pe,f"{pe['fullName']}: {s['era']} ERA, {s['inningsPitched']} IP, {s['strikeOuts']} K{gone(pe)}") for pe,s in p]
         stats.append((lbl+" — top OPS / ERA (min PA/IP)",it or ["No stats returned"]))
     except Exception as e: gaps.append(f"stats {lbl}: {e}")
 import re as _re
