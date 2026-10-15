@@ -47,7 +47,7 @@ jobs:
           git diff --cached --quiet || (git commit -m "Daily refresh $(date -u +%F)" && git push)
       - name: Stage site
         if: steps.gate.outputs.run == 'true'
-        run: mkdir _site && cp index.html manifest.json icon.png _site/
+        run: mkdir _site && cp index.html manifest.json icon.png _site/ && cp -r newsletter _site/
       - uses: actions/configure-pages@v5
         if: steps.gate.outputs.run == 'true'
       - uses: actions/upload-pages-artifact@v3

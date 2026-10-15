@@ -195,7 +195,9 @@ try:
         for pe in get(f"/people?personIds={ids}&hydrate=stats(group=[hitting,pitching],type=[season],season={YEAR},sportId={sp})")["people"]:
             for st in pe.get("stats",[]):
                 g=st["group"]["displayName"]
-                for x in st["splits"]:
+                spl=st["splits"]
+                if any("team" not in x for x in spl): spl=[x for x in spl if "team" not in x]
+                for x in spl:
                     a=agg.setdefault((pe["id"],g),{"lv":[]}); a["lv"].append(sp)
                     for k,v in x["stat"].items():
                         if isinstance(v,(int,float)): a[k]=a.get(k,0)+v
@@ -277,6 +279,7 @@ tiles.append(farm_tile())
 tiles+=[tile("Leaders · "+l.split(" —")[0],i,"stats",8) for l,i in stats]
 tiles=[badge_html(t) for t in tiles]
 if stand_html: tiles.insert(3,stand_html)
+tiles.insert(1,'<section class="tile nl"><h3><span>The Nats Report Weekly</span></h3><ul><li><a href="newsletter/issue-1.html">Latest: Issue #1 · Fall League heat, a farm that won, and an offseason to plan</a><span class="meta">Week of Oct 15, 2026</span></li><li><a href="newsletter/">All issues →</a></li></ul></section>')
 if today_html: tiles.insert(0,today_html)
 tiles.append(tile("Top 30 Prospects",(top30 or ["Prospect list unavailable"])+[f'<a class="all" href="{PROSPECT_URL}">Full list on MLB.com →</a>'],"stats",10,count=len(top30)))
 now=dt.datetime.now().strftime("%b %-d, %-I:%M %p CT")+(f" · SIMULATED {today}" if DEBUG else "")
