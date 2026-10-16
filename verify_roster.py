@@ -30,7 +30,7 @@ for f in sys.argv[1:]:
     ids = set(int(i) for i in re.findall(r"mlb\.com/player/(\d+)", src))
     ids |= set(int(i) for i in re.findall(r"/prospects/nationals/[a-z0-9-]+-(\d+)", src))
     text = strip(src)
-    found = [n for n in mlb_names if re.search(r"(?<!\w)" + re.escape(n) + r"(?![\w.])", text)]
+    found = [n for n in mlb_names if re.search(r"(?<!\w)" + re.escape(n) + r"(?!\w|\.\w)", text)]  # a sentence-ending period still counts
     # drop names that only appear inside a longer matched name (e.g. "Luis García" in "Luis García Jr.")
     for n in found:
         if not any(n != m and n in m and text.count(n) == text.count(m) for m in found): ids.add(mlb_names[n])

@@ -47,3 +47,8 @@ text-shadow:2px 2px 0 #000,-2px -2px 0 #000,2px -2px 0 #000,-2px 2px 0 #000;font
 .mh h1 .lp{display:inline;color:#7fd39a;text-shadow:0 3px 0 #0d4d24,0 6px 16px rgba(0,0,0,.35)}
 .mh .pad{position:absolute;width:46px;height:46px;right:16px;bottom:18px;transform:rotate(-12deg);opacity:.95;filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))}
 @media(min-width:760px){.mh .pad{width:60px;height:60px;right:28px}}
+.xm{display:grid;grid-template-columns:1fr;gap:6px;margin-bottom:6px}.xm .twitter-tweet,.xm blockquote{margin:6px auto!important;max-width:550px;width:100%}
+.xm blockquote{border-left:4px solid var(--red);background:#f7f8fb;border-radius:10px;padding:10px 14px;font-size:15px}.xm blockquote p{margin:0 0 6px}
+.cap{font-size:14px;margin:0 0 14px!important;color:var(--ink)}.cap b{color:var(--navy)}
+.qt{margin:0 0 10px;padding:10px 14px;border-left:4px solid var(--red);background:#fff4f4;border-radius:10px;font-size:15px}.qt cite{display:block;margin-top:4px;font-style:normal;color:var(--mute);font-size:12.5px}
+.st td.n{color:var(--mute);font-weight:400}

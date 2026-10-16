@@ -287,7 +287,16 @@ tiles.append(farm_tile())
 tiles+=[tile("Leaders · "+l.split(" —")[0],i,"stats",8) for l,i in stats]
 tiles=[badge_html(t) for t in tiles]
 if stand_html: tiles.insert(3,stand_html)
-tiles.insert(1,'<section class="tile nl"><h3><span>🪷 The Nats Lilleypad Weekly Report</span></h3><ul><li><a href="newsletter/issue-1.html">Latest: Issue #1 · How the Nats can retake the NL East</a><span class="meta">Week of Oct 15, 2026</span></li><li><a href="newsletter/">All issues →</a></li></ul></section>')
+# ---- newsletter tile: latest issue = first entry in newsletter/index.html (newest first), so adding an issue there is all it takes
+def latest_issue():
+    href,title,when="issue-1.html","Issue #1 · How the Nats can retake the NL East","Week of Oct 15, 2026"
+    try:
+        m=_r2.search(r'<a class="issue" href="([^"]+)"><b>([^<]+)</b><span>([^<]+)</span>',open("newsletter/index.html",encoding="utf-8").read())
+        if m: href,title,when=m.group(1),m.group(2).replace(": "," · ",1),m.group(3)
+    except Exception as e: gaps.append(f"newsletter archive: {e}")
+    return href,title,when
+_nh,_nt,_nw=latest_issue()
+tiles.insert(1,f'<section class="tile nl"><h3><span>🪷 The Nats Lilleypad Weekly Report</span></h3><ul><li><a href="newsletter/{_nh}">Latest: {_nt}</a><span class="meta">{_nw}</span></li><li><a href="newsletter/">All issues →</a></li></ul></section>')
 if today_html: tiles.insert(0,today_html)
 tiles.append(tile("Top 30 Prospects",(top30 or ["Prospect list unavailable"])+[f'<a class="all" href="{PROSPECT_URL}">Full list on MLB.com →</a>'],"stats",10,count=len(top30)))
 now=dt.datetime.now().strftime("%b %-d, %-I:%M %p CT")+(f" · SIMULATED {today}" if DEBUG else "")
