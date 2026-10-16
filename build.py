@@ -297,6 +297,7 @@ def latest_issue():
     return href,title,when
 _nh,_nt,_nw=latest_issue()
 tiles.insert(1,f'<section class="tile nl"><h3><span>🪷 The Nats Lilleypad Weekly Report</span></h3><ul><li><a href="newsletter/{_nh}">Latest: {_nt}</a><span class="meta">{_nw}</span></li><li><a href="newsletter/">All issues →</a></li></ul></section>')
+tiles.insert(2,'<section class="tile pens" style="background:#111;border-left:6px solid #FCB514"><h3 style="color:#FCB514;border-color:#FCB514"><span><img class="lg" src="https://assets.nhle.com/logos/nhl/svg/PIT_dark.svg" alt="">Justin\'s Penguins Paradise</span></h3><ul><li style="border:0"><a style="color:#fff" href="penguins/">Scores, standings, leaders, roster &amp; news →</a></li></ul></section>')
 if today_html: tiles.insert(0,today_html)
 tiles.append(tile("Top 30 Prospects",(top30 or ["Prospect list unavailable"])+[f'<a class="all" href="{PROSPECT_URL}">Full list on MLB.com →</a>'],"stats",10,count=len(top30)))
 now=dt.datetime.now().strftime("%b %-d, %-I:%M %p CT")+(f" · SIMULATED {today}" if DEBUG else "")
@@ -354,3 +355,5 @@ window.addEventListener('load',lay);window.addEventListener('resize',lay);docume
 open("index.html","w").write(page)
 json.dump({"name":"Nats Report","short_name":"Nats Report","start_url":"./","scope":"./","display":"standalone","background_color":"#ffffff","theme_color":"#14225A","icons":[{"src":"icon.png","sizes":"180x180","type":"image/png"}]},open("manifest.json","w"))
 print("gaps:",gaps)
+import subprocess,sys
+subprocess.run([sys.executable,"penguins.py"])

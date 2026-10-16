@@ -19,6 +19,15 @@ try:
             break
 except Exception as e:
     why = f"schedule check failed: {e}"
+if not run:  # Penguins (NHL) game window, same rule
+    try:
+        for g in json.load(urllib.request.urlopen(urllib.request.Request(f"https://api-web.nhle.com/v1/club-schedule/PIT/week/{d - dt.timedelta(days=1)}",headers={"User-Agent":"Mozilla/5.0"}),timeout=20)).get("games",[]):
+            start = dt.datetime.fromisoformat(g["startTimeUTC"].replace("Z", "+00:00"))
+            live = g.get("gameState") in ("LIVE","CRIT") and not os.environ.get("DEBUG_NOW")
+            if live or start - dt.timedelta(hours=1) <= now <= start + dt.timedelta(hours=4):
+                run, why = True, f"Penguins game {g['id']} ({g.get('gameState')}) starts {start.astimezone(CT):%m-%d %H:%M} CT"; break
+    except Exception as e:
+        why += f"; NHL check failed: {e}"
 print(f"run={'true' if run else 'false'}  # {why}")
 if os.environ.get("GITHUB_OUTPUT"):
     open(os.environ["GITHUB_OUTPUT"], "a").write(f"run={'true' if run else 'false'}\n")
