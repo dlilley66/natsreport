@@ -43,14 +43,14 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898099+github-actions[bot]@users.noreply.github.com"
-          git add index.html penguins
+          git add index.html penguins fantasy data
           git diff --cached --quiet || (git commit -m "Daily refresh $(date -u +%F)" && git push)
       - name: Verify newsletter roster (players still in Nats org)
         if: steps.gate.outputs.run == 'true'
         run: python3 verify_roster.py newsletter/issue-*.html
       - name: Stage site
         if: steps.gate.outputs.run == 'true'
-        run: mkdir _site && cp index.html manifest.json icon.png _site/ && cp -r newsletter penguins _site/
+        run: mkdir _site && cp index.html manifest.json icon.png _site/ && cp -r newsletter penguins fantasy _site/
       - uses: actions/configure-pages@v5
         if: steps.gate.outputs.run == 'true'
       - uses: actions/upload-pages-artifact@v3

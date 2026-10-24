@@ -298,6 +298,12 @@ def latest_issue():
 _nh,_nt,_nw=latest_issue()
 tiles.insert(1,f'<section class="tile nl"><h3><span>🪷 The Nats Lilleypad Weekly Report</span></h3><ul><li><a href="newsletter/{_nh}">Latest: {_nt}</a><span class="meta">{_nw}</span></li><li><a href="newsletter/">All issues →</a></li></ul></section>')
 tiles.insert(2,'<section class="tile pens" style="background:#111;border-left:6px solid #FCB514"><h3 style="color:#FCB514;border-color:#FCB514"><span><img class="lg" src="https://assets.nhle.com/logos/nhl/svg/PIT_dark.svg" alt="">Justin\'s Penguins Paradise</span></h3><ul><li style="border:0"><a style="color:#fff" href="penguins/">Scores, standings, leaders, roster &amp; news →</a></li></ul></section>')
+# ---- fantasy football tile (NFL season only; page built by fantasy.py)
+try:
+    from fantasy import season as _ffs
+    _ff_in,_ff_wk,_ff_lbl=_ffs()
+except Exception as e: _ff_in=False; gaps.append(f"fantasy season check: {e}")
+if _ff_in: tiles.insert(3,f'<section class="tile ff" style="background:#14225A;border-left:6px solid #AB0003"><h3 style="color:#fff;border-color:#AB0003"><span>🏈 Lilley Family Fantasy HQ</span>{f"<em>Week {_ff_wk}</em>" if _ff_wk else ""}</h3><ul><li style="border:0"><a style="color:#fff" href="fantasy/">Injuries, waiver trends, start/sit reads, news &amp; this week\'s schedule →</a></li></ul></section>')
 if today_html: tiles.insert(0,today_html)
 tiles.append(tile("Top 30 Prospects",(top30 or ["Prospect list unavailable"])+[f'<a class="all" href="{PROSPECT_URL}">Full list on MLB.com →</a>'],"stats",10,count=len(top30)))
 now=dt.datetime.now().strftime("%b %-d, %-I:%M %p CT")+(f" · SIMULATED {today}" if DEBUG else "")
@@ -357,3 +363,4 @@ json.dump({"name":"Nats Report","short_name":"Nats Report","start_url":"./","sco
 print("gaps:",gaps)
 import subprocess,sys
 subprocess.run([sys.executable,"penguins.py"])
+subprocess.run([sys.executable,"fantasy.py"])
