@@ -165,11 +165,34 @@ def rss(url):
         out.append(dict(title=t,link=l,src=src,date=d))
     return out
 news=[]
-for u in ["https://www.mlb.com/nationals/feeds/news/rss.xml","https://news.google.com/rss/search?q=%22Washington+Nationals%22+when:14d&hl=en-US&gl=US&ceid=US:en"]:
-    try: news+=rss(u)
+_G="https://news.google.com/rss/search?hl=en-US&gl=US&ceid=US:en&q="
+for u in ["https://www.mlb.com/nationals/feeds/news/rss.xml",
+          "https://www.mlbtraderumors.com/washington-nationals/feed",
+          "https://www.federalbaseball.com/rss/current.xml",
+          "https://nats.talkdcsports.com/feed/",
+          _G+"%22Washington+Nationals%22+(free+agent+OR+trade+OR+signs+OR+roster+OR+%22Rule+5%22+OR+CBA+OR+Rizzo+OR+Toboni)+when:14d",
+          _G+"%22Washington+Nationals%22+when:7d"]:
+    try:
+        got=rss(u)
+        if "mlbtraderumors" in u: [n.update(src="MLB Trade Rumors") for n in got]
+        elif "federalbaseball" in u: [n.update(src="Federal Baseball") for n in got]
+        elif "talkdcsports" in u: [n.update(src="Talk Nats") for n in got]
+        news+=got
     except Exception as e: gaps.append(f"rss {u}: {e}")
+import re as _re, datetime as _dt
+_now=_dt.datetime.now(_dt.timezone.utc); _off=(not nats_upcoming) or _now.month in (11,12,1,2)
+_recap=_re.compile(r"\b\d{1,2}\s*[-–]\s*\d{1,2}\b|\b(beat|beats|lose|loses|lost|recap|rout|routs|edge|edges|top|tops|fall|falls|sweep|swept|walk-off|walkoff|shut out|blank|blanks|game \d|highlights|vs\.?|at nationals)\b",_re.I)
+def _keep(n):
+    d=n["date"]
+    if not d: return False
+    if d.tzinfo is None: d=d.replace(tzinfo=_dt.timezone.utc)
+    if (_now-d).days>14: return False
+    if "new york times" in n["src"].lower() or "nytimes" in n["link"]: return False
+    if _off and _recap.search(n["title"]): return False
+    return True
+news=[n for n in news if _keep(n)]
 seen=set(); nd=[]
-for n in sorted(news,key=lambda n:n["date"].timestamp() if n["date"] else 0,reverse=True):
+for n in sorted(news,key=lambda n:n["date"].timestamp(),reverse=True):
     k="".join(c for c in n["title"].lower() if c.isalnum())[:60]
     if k in seen or not n["title"]: continue
     seen.add(k); nd.append(n)
