@@ -1,0 +1,11 @@
+# Frozen newsletter snapshots (sha256 of the exact file bytes).
+# Every issue is still checked. A listed hash is historical only after it was
+# already recorded at the last published roster-baseline: departures are
+# reported and do not block the daily site deploy. A new issue, an edited
+# issue, or a hash that was not on that baseline stays strict, so a current
+# roster claim must match the Nationals org (or be marked data-ok) before it
+# can ship. A failing issue is never added here.
+e38118b7fb42d0c28ebce0686121d85e0ab932dd0f10581126649b11ce355ad4  newsletter/issue-1.html
+2f8e514dfb854cf8e2e4aff6f11d6413316bdc3e8591e252b90740bbcb02d30a  newsletter/issue-2.html
+916d6aba13326afba432559f543d243f34be48e71f77825718f7d31145000e32  newsletter/issue-3.html
+2d1f21e2eb14d277d9b106b93a978e4bf5930a8cabdfcb99b78dc3f539440a98  newsletter/issue-4.html
