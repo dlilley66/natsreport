@@ -1,0 +1,4 @@
+# Prospect Spotlight covered players (MLB Pipeline Top 30 order as featured)
+# Format: YYYY-MM-DD | Issue #N | Rank | Full Name
+2026-11-06 | Issue #5 | 2 | Travis Sykora
+2026-11-06 | Issue #5 | 1 | Eli Willits
