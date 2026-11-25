@@ -20,9 +20,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+      head: ${{ steps.head.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -73,11 +73,31 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         with:
           path: _site
-      - id: deploy
+      - name: Record HEAD for roster baseline
         if: steps.gate.outputs.run == 'true'
+        id: head
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  # deploy-pages lists artifacts as soon as it starts. In the same job as the
+  # upload, that list is often still empty (actions/deploy-pages#451). A later
+  # job sees the artifact after the upload job has finished.
+  deploy:
+    needs: build
+    if: needs.build.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
         uses: actions/deploy-pages@v4
+      - uses: actions/checkout@v4
+        if: github.ref == 'refs/heads/main'
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.build.outputs.head }}
       - name: Advance roster baseline
-        if: steps.gate.outputs.run == 'true' && github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main'
         run: |
           set -euo pipefail
           git push origin "HEAD:refs/heads/roster-baseline"
