@@ -1,5 +1,10 @@
 name: Build and deploy Nats Report
 on:
+  # Morning refresh is committed to main by an external job. Schedule
+  # alone does not see that commit, and the 11:15 UTC cron is often
+  # delayed by many hours, so deploy on push to main.
+  push:
+    branches: [main]
   schedule:
     - cron: "15 11 * * *"        # daily refresh, 6:15 AM CDT (commits index.html)
     - cron: "*/15 15-23 * * *"   # game hours ~10am-6:45pm CDT (gated)
@@ -57,8 +62,8 @@ jobs:
       - name: Verify newsletter roster (players still in Nats org)
         if: steps.gate.outputs.run == 'true'
         run: python3 verify_roster.py --manifest historical-newsletters.txt --git-base "${{ steps.roster-base.outputs.rev }}" --update-manifest newsletter/issue-*.html
-      - name: Commit refreshed index.html (daily/manual only)
-        if: steps.gate.outputs.run == 'true' && (github.event.schedule == '15 11 * * *' || github.event_name == 'workflow_dispatch')
+      - name: Commit refreshed index.html (daily/manual/push)
+        if: steps.gate.outputs.run == 'true' && (github.event_name != 'schedule' || github.event.schedule == '15 11 * * *')
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898099+github-actions[bot]@users.noreply.github.com"
