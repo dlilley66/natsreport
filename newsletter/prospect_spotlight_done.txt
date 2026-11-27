@@ -6,3 +6,5 @@
 2026-11-13 | Issue #6 | 4 | Jarlin Susana
 2026-11-20 | Issue #7 | 5 | Devin Fitz-Gerald
 2026-11-20 | Issue #7 | 6 | Chris Hacopian
+2026-11-27 | Issue #8 | 7 | Ronny Cruz
+2026-11-27 | Issue #8 | 8 | Gavin Fien
